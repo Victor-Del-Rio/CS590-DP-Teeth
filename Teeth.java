@@ -1,74 +1,142 @@
-
-
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.*;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.StringTokenizer;
 
 public class Teeth {
+    static List<Integer> top;
+    static List<Integer> bottom;
 
-    public static int recursive(List<Integer> a, List<Integer> b) {
+    static int[] outputA;
+    static int[] outputB;
+
+
+    // u - up or i-1 or repeat b ; l - left or j-1 or repeat a; d - diagonal or i-1, j-1 or just go next
+    enum arrivalPath {
+        REPEAT_B, REPEAT_A, SKIP_REPEATS, NONE
+    }
+
+    static class ToothColumn {
+        int height;
+        arrivalPath path;
+
+        ToothColumn(int height, arrivalPath path){
+            this.height = height;
+            this.path = path;
+        }
+    }
+
+    public static int recursiveTopDown(List<Integer> a, List<Integer> b) {
+        // n - i - a
         int n = a.size();
         int m = b.size();
 
-        int[][] memo = new int[n][m];
+        // Initialize the 2D array to store memoized calls
+        ToothColumn[][] memo = new ToothColumn[n][m];
         for (int i = 0; i < n; i++) {
-            Arrays.fill(memo[i], -1);
+            for (int j = 0; j < m; j++) {
+                memo[i][j] = new ToothColumn(-1, arrivalPath.NONE);
+            }
+            // Arrays.fill(memo[i], new ToothColumn(-1, arrivalPath.NONE)); // No good - same object referenced across the entire row
         }
 
-        return minMaxHeight(n - 1, m - 1, a, b, memo);
+        int result = minMaxHeight(n - 1, m - 1, a, b, memo);
+        constructPath(memo, n-1, m-1);
+
+        return result;
     }
     
 
-    private static int minMaxHeight(int i, int j,
-                                     List<Integer> a,
-                                     List<Integer> b,
-                                     int[][] memo) {
-        if (memo[i][j] != -1L) {
-            return memo[i][j];
+    private static int minMaxHeight(int i, int j, List<Integer> a, List<Integer> b, ToothColumn[][] memo) {
+        if (memo[i][j].height != -1) {
+            return memo[i][j].height;
         }
 
         int currHeight = (int) a.get(i) + b.get(j);
 
         if (i == 0 && j == 0) {
-            memo[i][j] = currHeight;
+            memo[i][j].height = currHeight;
+            // No need to override arrivalPath.NONE
             return currHeight;
         }
 
-        int bestPrev = Integer.MAX_VALUE;
+        int bestPrevHeight = Integer.MAX_VALUE;
+        arrivalPath bestPath = arrivalPath.NONE;
 
-        if (i > 0) { // repeat b[j]
-            bestPrev = Math.min(bestPrev, minMaxHeight(i - 1, j, a, b, memo));
+        // Check no-repeat option first to avoid bestPath taking the long, but equally 'high' route
+        if (i > 0 && j > 0) {  // advance both
+            int pathOption = minMaxHeight(i - 1, j - 1, a, b, memo);
+            if (pathOption < bestPrevHeight) {
+                bestPrevHeight = pathOption;
+                bestPath = arrivalPath.SKIP_REPEATS;
+            }
         }
-        if (j > 0) { // repeat a[i]
-            bestPrev = Math.min(bestPrev, minMaxHeight(i, j - 1, a, b, memo));
+        if (i > 0) {  // repeat b[j]
+            int pathOption = minMaxHeight(i - 1, j, a, b, memo);
+            if (pathOption < bestPrevHeight) {
+                bestPrevHeight = pathOption;
+                bestPath = arrivalPath.REPEAT_B;
+            }
         }
-        if (i > 0 && j > 0) { // advance both
-            bestPrev = Math.min(bestPrev, minMaxHeight(i - 1, j - 1, a, b, memo));
+        if (j > 0) {   // repeat a[i]
+            int pathOption = minMaxHeight(i, j - 1, a, b, memo);
+            if (pathOption < bestPrevHeight) {
+                bestPrevHeight = pathOption;
+                bestPath = arrivalPath.REPEAT_A;
+            }
         }
 
-        memo[i][j] = Math.max(currHeight, bestPrev);
-        return memo[i][j];
+        memo[i][j].height = Math.max(currHeight, bestPrevHeight);
+        memo[i][j].path = bestPath;
+        return memo[i][j].height;
     }
 
-    // Optional: convenience overload for arrays
-//    public static int recursive(int[] aArr, int[] bArr) {
-//        List<Integer> a = new ArrayList<>(aArr.length);
-//        List<Integer> b = new ArrayList<>(bArr.length);
-//        for (int x : aArr) a.add(x);
-//        for (int x : bArr) b.add(x);
-//        return recursive(a, b);
-//    }
+    static void constructPath(ToothColumn[][] memo, int i, int j) {
+        List<Integer> pathI = new ArrayList<>();
+        List<Integer> pathJ = new ArrayList<>();
+
+        // Walk backwards from (n-1, m-1) to (0,0)
+        while (true) {
+            pathI.add(i);
+            pathJ.add(j);
+
+            if (i == 0 && j == 0) {
+                break;
+            }
+
+            arrivalPath path = memo[i][j].path;
+            if (path == null || path == arrivalPath.NONE) {
+                // avoid spinning forever
+                throw new IllegalStateException("Code is broken, move should have been stored for (" + i + "," + j + ")");
+            }
+
+            switch (path) {
+                case REPEAT_B:      // came from (i-1, j)
+                    i = i - 1;
+                    break;
+                case REPEAT_A:      // came from (i, j-1)
+                    j = j - 1;
+                    break;
+                case SKIP_REPEATS:  // came from (i-1, j-1)
+                    i = i - 1;
+                    j = j - 1;
+                    break;
+            }
+        }
+
+        // Currently path is from end -> start; reverse into arrays start -> end
+        int len = pathI.size();
+        outputA = new int[len];
+        outputB = new int[len];
+
+        for (int k = 0; k < len; k++) {
+            outputA[k] = top.get(pathI.get(len - 1 - k));
+            outputB[k] = bottom.get(pathJ.get(len - 1 - k));
+        }
+    }
 
 
-    static TeethInstance readTeethInput(String path) throws IOException {
+    static void parseInput(String path) throws IOException {
         BufferedReader br = new BufferedReader(new FileReader(path));
 
         String line = br.readLine();
@@ -81,34 +149,35 @@ public class Teeth {
         int n = Integer.parseInt(st.nextToken());
         int m = Integer.parseInt(st.nextToken());
 
-        List<Integer> top = new ArrayList<>(n);
-        List<Integer> bottom = new ArrayList<>(m);
+        top = new ArrayList<>(n);
+        bottom = new ArrayList<>(m);
 
         line = br.readLine();
         st = new StringTokenizer(line);
         for (int i = 0; i < n; i++) {
             top.add(Integer.parseInt(st.nextToken()));
         }
+        System.out.println(top);
 
         line = br.readLine();
         st = new StringTokenizer(line);
         for (int i = 0; i < m; i++) {
             bottom.add(Integer.parseInt(st.nextToken()));
         }
-
+        System.out.println(bottom);
+        
         br.close();
-        return new TeethInstance(top, bottom);
     }
 
 
-    public void writeAlignmentToFile(String path, int height, int[] top, int[] bottom) throws IOException {
+    static void writeOutput(String path, int maxHeight, int[] top, int[] bottom) throws IOException {
         if (top.length != bottom.length) {
             throw new IllegalArgumentException("We messed up");
         }
 
         PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(path)));
 
-        out.println(height);
+        out.println(maxHeight);
         for (int i = 0; i < top.length; i++) {
             out.println(top[i] + " " + bottom[i]);
         }
@@ -118,53 +187,30 @@ public class Teeth {
     }
 
     public static void main(String[] args) throws IOException {
-        List<Integer> a = new ArrayList<>(Arrays.asList(2, 7, 4, 5, 3, 1, 4, 6));
-        List<Integer> b = new ArrayList<>(Arrays.asList(6, 4, 1, 3, 5, 4, 7, 2));
 
-        List<Integer> c = new ArrayList<>(Arrays.asList(2, 3));
-        List<Integer> d = new ArrayList<>(Arrays.asList(1, 4, 1));
+        // TODO change this before JAR
+        String cwd = System.getProperty("user.dir");
+        String inputPath  = String.valueOf(Path.of(cwd, "Java/src/", "input.txt"));
+        String outputPath = String.valueOf(Path.of(cwd, "Java/src/", "output.txt"));
+        System.out.println(inputPath); // TODO remove
 
-        List<Integer> e = new ArrayList<>(Arrays.asList(1, 3, 2));
-        List<Integer> f = new ArrayList<>(Arrays.asList(4, 5, 2));
-
-
-        if (args.length < 1) {
-            System.out.println("Usage: java ReadInput <input.txt>");
-            return;
-        }
-        String inputFile = args[0];
-        System.out.println(inputFile);
-//        TeethInstance readTeethInput(String path) throws IOException {
-        
-        TeethInstance teeth = readTeethInput(inputFile);
-        System.out.println(recursive(teeth.top, teeth.bottom));
-//
-
-//        String contents = new String(Files.readAllBytes(Paths.get(inputFile)));
-//        System.out.println(contents);
+        parseInput(inputPath);
+        int maxHeight = recursiveTopDown(top, bottom);
+        System.out.println(maxHeight);
+        writeOutput(outputPath, maxHeight, outputA, outputB);
 
 
-//        TeethInstance inst = readTeethInput(inputFile);
-
-
-        System.out.println(recursive(a, b));
-        System.out.println(recursive(c, d));
-        System.out.println(recursive(e, f));
 
     }
 }
 
 
 
-final class TeethInstance {
-    public final List<Integer> top;
-    public final List<Integer> bottom;
 
-    public TeethInstance(List<Integer> top, List<Integer> bottom) {
-        this.top = top;
-        this.bottom = bottom;
-    }
-}
+//8 8
+//6 4 1 3 5 4 7 2
+//2 7 4 5 3 1 4 6
 
-
-
+//3 3
+//1 3 2
+//4 5 2
