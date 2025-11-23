@@ -11,7 +11,7 @@ public class Teeth {
     static int[] outputB;
 
 
-    // u - up or i-1 or repeat b ; l - left or j-1 or repeat a; d - diagonal or i-1, j-1 or just go next
+    // move up or i-1 or repeat b ; move left or j-1 or repeat a; move diagonal or i-1, j-1 or just go next
     enum arrivalPath {
         REPEAT_B, REPEAT_A, SKIP_REPEATS, NONE
     }
@@ -190,8 +190,8 @@ public class Teeth {
 
         // TODO change this before JAR
         String cwd = System.getProperty("user.dir");
-        String inputPath  = String.valueOf(Path.of(cwd, "Java/src/", "input.txt"));
-        String outputPath = String.valueOf(Path.of(cwd, "Java/src/", "output.txt"));
+        String inputPath  = String.valueOf(Path.of(cwd, "input.txt"));
+        String outputPath = String.valueOf(Path.of(cwd, "output.txt"));
         System.out.println(inputPath); // TODO remove
 
         parseInput(inputPath);
